@@ -1,109 +1,46 @@
-use regex_lite::Regex;
+mod parser;
+pub mod utils;
+
+pub use parser::Parser;
 
 #[macro_export]
 macro_rules! grammar {
-    ($( $vis:vis $name:ident : $t:ty = {
+    (
+        $( $vis:vis $name:ident : $t:ty = {
+            $(
+                $( $bind:ident : $e:tt )+ => $res:expr
+            ),+ $(,)?
+        }; )*
+    ) => {
         $(
-            $( $($bind:ident )? : $e:tt )+ => $res:expr
-        ),+ $(,)?
-    }; )*) => {};
+            pub struct $name;
+
+            impl<'parser> $crate::Parser<'parser> for $name {
+                type Output = $t;
+
+                fn parse(&self, input: &'parser str) -> Option<(Self::Output, &'parser str)> {
+                    $crate::switch! {
+                        $(
+                            input,
+                            ($( $e, )+)
+                                .map(|($( $bind, )+)| { $res }),
+                        )+
+                    }
+                }
+            }
+        )*
+    };
 }
 
-pub trait Parser<'input>: Sized {
-    type Output;
-
-    fn parse(&self, input: &'input str) -> Option<(Self::Output, &'input str)>;
-
-    fn and<P>(self, other: P) -> And<Self, P>
-    where
-        P: Parser<'input>,
-    {
-        And(self, other)
-    }
-
-    fn or<P>(self, other: P) -> Or<Self, P>
-    where
-        P: Parser<'input>,
-    {
-        Or(self, other)
-    }
-}
-
-impl<'input, T, F> Parser<'input> for F
-where
-    F: Fn(&'input str) -> Option<(T, &'input str)>,
-{
-    type Output = T;
-
-    fn parse(&self, input: &'input str) -> Option<(Self::Output, &'input str)> {
-        (self)(input)
-    }
-}
-
-impl<'input> Parser<'input> for &'input str {
-    type Output = &'input str;
-
-    fn parse(&self, input: &'input str) -> Option<(Self::Output, &'input str)> {
-        let re = Regex::new(self).expect("regex failed to compile");
-        let end = re.find_at(input, 0)?.end();
-
-        Some((&input[..end], &input[end..]))
-    }
-}
-
-impl<'input> Parser<'input> for char {
-    type Output = char;
-
-    fn parse(&self, input: &'input str) -> Option<(Self::Output, &'input str)> {
-        input.strip_prefix(|ch| ch == *self).map(|s| (*self, s))
-    }
-}
-
-pub struct And<L, R>(L, R);
-
-impl<'parser, L, R> Parser<'parser> for And<L, R>
-where
-    L: Parser<'parser>,
-    R: Parser<'parser>,
-{
-    type Output = (L::Output, R::Output);
-
-    fn parse(&self, input: &'parser str) -> Option<(Self::Output, &'parser str)> {
-        let (l, input) = self.0.parse(input)?;
-        let (r, output) = self.1.parse(input)?;
-        Some(((l, r), output))
-    }
-}
-
-pub enum Either<L, R> {
-    L(L),
-    R(R),
-}
-
-pub struct Or<L, R>(L, R);
-
-impl<'parser, L, R> Parser<'parser> for Or<L, R>
-where
-    L: Parser<'parser>,
-    R: Parser<'parser>,
-{
-    type Output = Either<L::Output, R::Output>;
-
-    fn parse(&self, input: &'parser str) -> Option<(Self::Output, &'parser str)> {
-        if let Some((l, output)) = self.0.parse(input) {
-            Some((Either::L(l), output))
-        } else {
-            self.1.parse(input).map(|(r, o)| (Either::R(r), o))
-        }
-    }
-}
-
-impl<'parser> Parser<'parser> for () {
-    type Output = ();
-
-    fn parse(&self, input: &'parser str) -> Option<(Self::Output, &'parser str)> {
-        Some(((), input))
-    }
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __bind_ident {
+    ( $bind:ident ) => {
+        $bind
+    };
+    () => {
+        _
+    };
 }
 
 // macro_rules! tuple_impls {
