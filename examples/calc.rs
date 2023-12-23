@@ -15,12 +15,15 @@ pub enum Opcode {
 }
 
 grammar! {
+  pub mod grammar;
+  use [crate::{Expr, Opcode}, std::str::FromStr];
+
   pub Expr: Box<Expr> = {
       l:Expr op:ExprOp r:Factor => Box::new(Expr::Op(l, op, r)),
       f:Factor => f,
   };
 
-  ExprOp: Opcode = { // (3)
+  ExprOp: Opcode = {
       q:'+' => Opcode::Add,
       q:'-' => Opcode::Sub,
   };
@@ -30,7 +33,7 @@ grammar! {
       t:Term => t,
   };
 
-  FactorOp:Opcode = {
+  FactorOp: Opcode = {
       q:'*' => Opcode::Mul,
       q:'/' => Opcode::Div,
   };

@@ -15,15 +15,24 @@ macro_rules! chain {
 
 #[macro_export]
 macro_rules! switch {
-    ( $input:expr, $( $p:expr ),+ $(,)? ) => {{
+    ( $input:expr, $( $p:expr ),+ $(,)? ) => {(||{
+        struct __Parser<T>(T);
+        impl<'parser, T: $crate::Parser<'parser>> $crate::Parser<'parser> for __Parser<T> {
+            type Output = T::Output;
+
+            fn parse(&self, input: &'parser str) -> Option<(Self::Output, &'parser str)> {
+                self.0.parse(input)
+            }
+        }
+
         let input = $input;
         $(
-            if let Some((res, output)) = ($p).parse(input) {
+            if let Some((res, output)) = __Parser($p).parse(input) {
                 return Some((res, output));
             }
         )+
         None
-    }};
+    })()};
 }
 
 pub struct And<L, R>(pub L, pub R);

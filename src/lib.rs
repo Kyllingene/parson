@@ -6,40 +6,48 @@ pub use parser::Parser;
 #[macro_export]
 macro_rules! grammar {
     (
+        $mv:vis mod $mn:ident;
+        use [$( $path:tt )*];
         $( $vis:vis $name:ident : $t:ty = {
             $(
                 $( $bind:ident : $e:tt )+ => $res:expr
             ),+ $(,)?
         }; )*
     ) => {
+        $mv mod $mn {
+            use {$( $path )*};
+            pub mod parser {
+                $(
+                    pub struct $name;
+                )*
+            }
         $(
-            pub struct $name;
-
-            impl<'parser> $crate::Parser<'parser> for $name {
+            impl<'parser> $crate::Parser<'parser> for parser::$name {
                 type Output = $t;
 
                 fn parse(&self, input: &'parser str) -> Option<(Self::Output, &'parser str)> {
                     $crate::switch! {
                         $(
                             input,
-                            ($( $e, )+)
+                            ($( $crate::__expr_path!($e), )+)
                                 .map(|($( $bind, )+)| { $res }),
                         )+
                     }
                 }
             }
         )*
+        }
     };
 }
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __bind_ident {
-    ( $bind:ident ) => {
-        $bind
+macro_rules! __expr_path {
+    ( $parser:ident ) => {
+        parser::$parser
     };
-    () => {
-        _
+    ( $other:tt ) => {
+        $other
     };
 }
 
